@@ -1,0 +1,48 @@
+# characters
+;
+,
+.
+(
+)
+{
+}
+[
+]
+
+# operators
+=
++
+-
+*
+/
+//
+%
+**
+&&
+||
+==
+!=
+<
+<=
+>
+>=
+!
+
+# data types
+1
+1.1
+True
+"string"
+
+# keywords
+def
+if
+elif
+else
+for
+while
+break
+return
+
+# other
+identifier
