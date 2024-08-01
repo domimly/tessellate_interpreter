@@ -30,7 +30,7 @@ class TokenType(Enum):
     LESS_OR_EQUAL_OPERATOR = auto()     # <=
     MORE_THAN_OPERATOR = auto()         # >
     MORE_OR_EQUAL_OPERATOR = auto()     # >=
-    NEGATION_OPERATOR = auto()          # !, -
+    NEGATION_OPERATOR = auto()          # !
 
     # data types
     INTEGER = auto()
@@ -44,6 +44,7 @@ class TokenType(Enum):
     ELIF = auto()
     ELSE = auto()
     FOR = auto()
+    IN = auto()
     WHILE = auto()
     BREAK = auto()
     RETURN = auto()
@@ -54,16 +55,16 @@ class TokenType(Enum):
 
 
 class Token:
-    def __init__(self, token_type, value, position):
+    def __init__(self, token_type, position, value=None):
         self.token_type = token_type
-        self.value = value
         self.position = position
+        self.value = value
 
     def __str__(self):
         token_repr = (
             f'type: {self.token_type.name:<25}'
             f'pos: {self.position}'
         )
-        if self.value != '':
+        if self.value:
             token_repr += f'value: {self.value}'
         return token_repr

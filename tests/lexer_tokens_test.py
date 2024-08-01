@@ -1,19 +1,41 @@
 import io
 
-from lexer.stream import Stream
-from lexer.lexer import Lexer
-from lexer.tokens import TokenType
-from lexer.constants import (
+from src.lexer.stream import Stream
+from src.lexer.lexer import Lexer
+from src.lexer.tokens import TokenType
+from src.constants import (
     MAXIMUM_IDENTIFIER,
     MAXIMUM_STRING,
     MAXIMUM_INT_DIGITS,
+    MAXIMUM_FLOAT_DECIMALS
 )
+from src.error_handling.lexer_error import LexerError
 
 
 class TestLexerTokens:
+    def get_tokens(self, lexer):
+        tokens = []
+        errors = []
+        while True:
+            try:
+                if token := lexer.tokenize():
+                    tokens.append(token)
+                    if token.token_type == TokenType.END_OF_FILE:
+                        break
+            except LexerError as e:
+                errors.append(e)
+                break
+        return tokens, errors
+
     def get_tokens_info_from_text(self, text):
-        lexer = Lexer(Stream(io.StringIO(text)))
-        tokens, errors = lexer.get_tokens()
+        lexer = Lexer(
+            Stream(io.StringIO(text)),
+            MAXIMUM_IDENTIFIER,
+            MAXIMUM_STRING,
+            MAXIMUM_INT_DIGITS,
+            MAXIMUM_FLOAT_DECIMALS
+        )
+        tokens, errors = self.get_tokens(lexer)
         tokens_types = []
         tokens_values = []
         tokens_positions = []
@@ -28,7 +50,7 @@ class TestLexerTokens:
     def test_eof(self):
         (types, values, positions, errors) = self.get_tokens_info_from_text('')
         assert types == [TokenType.END_OF_FILE]
-        assert values == ['']
+        assert values == [None]
         assert positions == [(1, 1)]
         assert len(errors) == 0
 
@@ -47,7 +69,7 @@ class TestLexerTokens:
             TokenType.RIGHT_SQUARE_BRACKETS,
             TokenType.END_OF_FILE
         ]
-        assert set(values) == {''}
+        assert set(values) == {None}
         assert positions == [
             (1, 1),
             (1, 2),
@@ -71,7 +93,7 @@ class TestLexerTokens:
             TokenType.MODULO_OPERATOR,
             TokenType.END_OF_FILE
         ]
-        assert set(values) == {''}
+        assert set(values) == {None}
         assert positions == [
             (1, 1),
             (1, 3),
@@ -88,7 +110,7 @@ class TestLexerTokens:
             TokenType.OR_OPERATOR,
             TokenType.END_OF_FILE
         ]
-        assert set(values) == {''}
+        assert set(values) == {None}
         assert positions == [
             (1, 1),
             (1, 4),
@@ -114,7 +136,7 @@ class TestLexerTokens:
             TokenType.MORE_OR_EQUAL_OPERATOR,
             TokenType.END_OF_FILE
         ]
-        assert set(values) == {''}
+        assert set(values) == {None}
         assert positions == [
             (1, 1),
             (1, 3),
@@ -152,7 +174,7 @@ class TestLexerTokens:
             TokenType.BOOL,
             TokenType.END_OF_FILE
         ]
-        assert set(values) == {'', 'True', 'False'}
+        assert set(values) == {None, True, False}
         assert positions == [
             (1, 1),
             (1, 5),
@@ -180,9 +202,9 @@ class TestLexerTokens:
             TokenType.END_OF_FILE
         ]
         assert values == [
-            'True',
-            'False',
-            ''
+            True,
+            False,
+            None
         ]
         assert positions == [
             (1, 1),
@@ -204,7 +226,7 @@ class TestLexerTokens:
             'identifier',
             'identifier2',
             'identifier_3',
-            ''
+            None
         ]
         assert positions == [
             (1, 1),
@@ -223,7 +245,7 @@ class TestLexerTokens:
         ]
         assert values == [
             t,
-            ''
+            None
         ]
         assert positions == [
             (1, 1),
@@ -244,7 +266,7 @@ class TestLexerTokens:
             125,
             9,
             4,
-            ''
+            None
         ]
         assert positions == [
             (1, 1),
@@ -263,7 +285,7 @@ class TestLexerTokens:
         ]
         assert values == [
             int(t),
-            ''
+            None
         ]
         assert positions == [
             (1, 1),
@@ -284,7 +306,7 @@ class TestLexerTokens:
             3.14,
             2.05,
             999.0,
-            ''
+            None
         ]
         assert positions == [
             (1, 1),
@@ -295,7 +317,7 @@ class TestLexerTokens:
         assert len(errors) == 0
 
     def test_string(self):
-        t = '"a string\n"'
+        t = '"a string\\n"'
         (types, values, positions, errors) = self.get_tokens_info_from_text(t)
         assert types == [
             TokenType.STRING,
@@ -303,7 +325,7 @@ class TestLexerTokens:
         ]
         assert values == [
             'a string\n',
-            ''
+            None
         ]
         assert positions == [
             (1, 1),
@@ -321,7 +343,7 @@ class TestLexerTokens:
         ]
         assert values == [
             max_string,
-            ''
+            None
         ]
         assert positions == [
             (1, 1),
@@ -336,7 +358,7 @@ class TestLexerTokens:
             TokenType.END_OF_FILE
         ]
         assert values == [
-            ''
+            None
         ]
         assert positions == [
             (1, len(t) + 1)
@@ -352,7 +374,7 @@ class TestLexerTokens:
         ]
         assert values == [
             'this_is_an_identifier',
-            ''
+            None
         ]
         assert positions == [
             (1, 1),

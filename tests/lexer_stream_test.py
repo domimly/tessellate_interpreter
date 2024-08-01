@@ -1,20 +1,47 @@
-from lexer.stream import Stream
-from lexer.lexer import Lexer
-from lexer.tokens import TokenType
+from src.lexer.stream import Stream
+from src.lexer.lexer import Lexer
+from src.lexer.tokens import TokenType
 
-from lexer.constants import (
-    INVALID_SYNTAX_ERROR_MSG,
-    UNCLOSED_STRING_ERROR_MSG,
+from src.constants import (
+    MAXIMUM_IDENTIFIER,
+    MAXIMUM_STRING,
+    MAXIMUM_INT_DIGITS,
+    MAXIMUM_FLOAT_DECIMALS,
+)
+from src.error_handling.lexer_error import (
+    LexerError,
+    InvalidSyntaxError,
+    UnclosedStringError,
 )
 
 PATH = 'tests/code_examples/'
 
 
 class TestLexerStream:
+    def get_tokens(self, lexer):
+        tokens = []
+        errors = []
+        while True:
+            try:
+                if token := lexer.tokenize():
+                    tokens.append(token)
+                    if token.token_type == TokenType.END_OF_FILE:
+                        break
+            except LexerError as e:
+                errors.append(e)
+                break
+        return tokens, errors
+
     def get_tokens_info_from_stream(self, path):
         with open(path, 'r') as file:
-            lexer = Lexer(Stream(file))
-            tokens, errors = lexer.get_tokens()
+            lexer = Lexer(
+                Stream(file),
+                MAXIMUM_IDENTIFIER,
+                MAXIMUM_STRING,
+                MAXIMUM_INT_DIGITS,
+                MAXIMUM_FLOAT_DECIMALS
+            )
+            tokens, errors = self.get_tokens(lexer)
         tokens_types = []
         tokens_values = []
         tokens_positions = []
@@ -61,9 +88,9 @@ class TestLexerStream:
             TokenType.END_OF_FILE
         ]
         assert (values) == [
-            'pi', '', 3.14, '',
-            'name', '', 'Name', '',
-            'num', '', 100, '', ''
+            'pi', None, 3.14, None,
+            'name', None, 'Name', None,
+            'num', None, 100, None, None
         ]
         assert positions == [
             (1, 1), (1, 4), (1, 6), (1, 10),
@@ -128,7 +155,7 @@ class TestLexerStream:
             TokenType.IDENTIFIER,
             TokenType.END_OF_FILE
         ]
-        assert set(values) == {'', 1, 1.1, 'True', 'string', 'identifier'}
+        assert set(values) == {None, 1, 1.1, True, 'string', 'identifier'}
         assert len(errors) == 0
 
     def test_comments(self):
@@ -152,8 +179,8 @@ class TestLexerStream:
             TokenType.END_OF_FILE
         ]
         assert (values) == [
-            'i', '', 1, '',
-            'j', '', 'True', '', ''
+            'i', None, 1, None,
+            'j', None, True, None, None
         ]
         assert positions == [
             (1, 1), (1, 3), (1, 5), (1, 6),
@@ -181,14 +208,14 @@ class TestLexerStream:
             TokenType.ASSIGN_OPERATOR,
         ]
         assert (values) == [
-            'i', '', 3, '',
-            'j', ''
+            'i', None, 3, None,
+            'j', None
         ]
         assert positions == [
             (1, 1), (1, 2), (1, 3), (1, 4),
             (2, 1), (2, 2)
         ]
-        assert error.message == INVALID_SYNTAX_ERROR_MSG
+        assert isinstance(error, InvalidSyntaxError)
         assert error_position == (2, 3)
 
     def test_unclosed_string(self):
@@ -205,10 +232,10 @@ class TestLexerStream:
             TokenType.ASSIGN_OPERATOR,
         ]
         assert (values) == [
-            's', ''
+            's', None
         ]
         assert positions == [
             (1, 1), (1, 3)
         ]
-        assert error.message == UNCLOSED_STRING_ERROR_MSG
+        assert isinstance(error, UnclosedStringError)
         assert error_position == (1, 5)

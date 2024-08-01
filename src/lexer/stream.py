@@ -12,19 +12,9 @@ class Stream:
             self.current_char = 'EOF'
             self.current_position.next_column()
         elif char == '\n':
-            self.current_char = char
+            self.current_char = '\n'
             self.current_position.next_line()
             self.current_position.current_column = 0
-        else:
-            self.current_char = char
-            self.current_position.next_column()
-        return self.current_char
-
-    def next_string_char(self):
-        char = self.stream.read(1)
-        if not char:
-            self.current_char = 'EOF'
-            self.current_position.next_column()
         else:
             self.current_char = char
             self.current_position.next_column()

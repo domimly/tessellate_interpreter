@@ -1,22 +1,26 @@
-from lexer.tokens import Token, TokenType
-from lexer.stream import TextPosition
-from lexer.lexer_error import LexerError
-from lexer.constants import (
-    MAXIMUM_IDENTIFIER,
-    MAXIMUM_STRING,
-    MAXIMUM_INT_DIGITS,
-    INVALID_SYNTAX_ERROR_MSG,
-    IDENTIFIER_TOO_LONG_ERROR_MSG,
-    STRING_TOO_LONG_ERROR_MSG,
-    UNCLOSED_STRING_ERROR_MSG,
-    INT_TOO_BIG_ERROR_MSG
+from src.lexer.tokens import Token, TokenType
+from src.lexer.stream import TextPosition
+from src.error_handling.lexer_error import (
+    InvalidSyntaxError,
+    IdentifierTooLongError,
+    StringTooLongError,
+    InvalidEscapeSequenceError,
+    UnclosedStringError,
+    IntTooBigError,
+    TooManyDecimalsInFloatError
 )
 
 
 class Lexer:
-    def __init__(self, stream):
+    def __init__(
+        self, stream, max_id, max_string, max_int, max_float_decimals
+    ):
         self.stream = stream
         self.current_token_position = TextPosition(1, 0)
+        self.max_id = max_id
+        self.max_string = max_string
+        self.max_int = max_int
+        self.max_float_decimals = max_float_decimals
 
         self.keywords = {
             'def': TokenType.DEF,
@@ -24,6 +28,7 @@ class Lexer:
             'elif': TokenType.ELIF,
             'else': TokenType.ELSE,
             'for': TokenType.FOR,
+            'in': TokenType.IN,
             'while': TokenType.WHILE,
             'break': TokenType.BREAK,
             'return': TokenType.RETURN,
@@ -34,6 +39,13 @@ class Lexer:
 
             'True': TokenType.BOOL,
             'False': TokenType.BOOL
+        }
+
+        self.escapes = {
+            'n': '\n',
+            'b': '\b',
+            'r': '\r',
+            't': '\t',
         }
 
         self.chars_and_operators = {
@@ -84,9 +96,6 @@ class Lexer:
     def next_char(self):
         return self.stream.next_char()
 
-    def next_string_char(self):
-        return self.stream.next_string_char()
-
     def current_position(self):
         return self.stream.get_position()
 
@@ -112,8 +121,7 @@ class Lexer:
         if token:
             return token
         else:
-            raise LexerError(
-                INVALID_SYNTAX_ERROR_MSG,
+            raise InvalidSyntaxError(
                 self.current_token_position
             )
 
@@ -126,23 +134,18 @@ class Lexer:
         char = self.current_char()
         if char == '#':
             char = self.next_char()
-            self.skip_comment()
-
-    def skip_comment(self):
-        char = self.current_char()
-        while (char != '\n'):
-            char = self.next_char()
-            if char == 'EOF':
-                return
-        self.next_char()
-        self.set_current_token_position()
-        return
+            while (char != '\n'):
+                char = self.next_char()
+                if char == 'EOF':
+                    return
+            self.next_char()
+            self.set_current_token_position()
+            return
 
     def try_eof(self):
         if self.current_char() == 'EOF':
             return Token(
                 TokenType.END_OF_FILE,
-                '',
                 self.current_position()
             )
 
@@ -156,88 +159,112 @@ class Lexer:
             while ((char.isalnum() or char == '_')
                     and char != 'EOF'):
                 i += 1
-                if i > MAXIMUM_IDENTIFIER:
-                    raise LexerError(
-                        IDENTIFIER_TOO_LONG_ERROR_MSG,
+                if i > self.max_id:
+                    raise IdentifierTooLongError(
+                        self.max_id,
                         self.current_token_position
                     )
                 identifier += char
                 char = self.next_char()
             if token_type := self.keywords.get(identifier):
-                if identifier in ['True', 'False']:
-                    val = identifier
+                if identifier == 'True':
+                    val = True
+                elif identifier == 'False':
+                    val = False
                 else:
-                    val = ''
+                    val = None
                 return Token(
                     token_type,
-                    val,
-                    self.current_token_position
+                    self.current_token_position,
+                    val
                 )
             else:
                 return Token(
                     TokenType.IDENTIFIER,
-                    identifier,
-                    self.current_token_position
+                    self.current_token_position,
+                    identifier
                 )
 
     def try_string(self):
         string = ''
         quote_char = self.current_char()
         if quote_char == '"' or quote_char == "'":
-            char = self.next_string_char()
+            char = self.next_char()
             i = 0
             while char != quote_char:
-                if char == 'EOF':
-                    raise LexerError(
-                        UNCLOSED_STRING_ERROR_MSG,
+                if char == 'EOF' or char == 'NEWLINE':
+                    raise UnclosedStringError(
                         self.current_token_position
                     )
                 i += 1
-                if i > MAXIMUM_STRING:
-                    raise LexerError(
-                        STRING_TOO_LONG_ERROR_MSG,
+                if i > self.max_string:
+                    raise StringTooLongError(
+                        self.max_string,
                         self.current_token_position
                     )
-                string += char
-                char = self.next_string_char()
+                if self.current_char() == '\\':
+                    char = self.next_char()
+                    if char in ['\\', '"', "'"]:
+                        string += char
+                    elif escaped_char := self.escapes.get(char):
+                        string += escaped_char
+                    else:
+                        raise InvalidEscapeSequenceError(
+                            char,
+                            self.current_position()
+                        )
+                else:
+                    string += char
+                char = self.next_char()
             self.next_char()
             return Token(
                 TokenType.STRING,
-                string,
-                self.current_token_position
+                self.current_token_position,
+                string
             )
 
     def try_integer_or_float(self):
-        number = ''
+        number = 0
         char = self.current_char()
         if char.isdigit():
             i = 1
-            number += char
+            number += int(char)
             char = self.next_char()
             while char.isdigit():
                 i += 1
-                if i > MAXIMUM_INT_DIGITS:
-                    raise LexerError(
-                        INT_TOO_BIG_ERROR_MSG,
+                if i > self.max_int:
+                    raise IntTooBigError(
+                        self.max_int,
                         self.current_token_position
                     )
-                number += char
+                number = number * 10 + int(char)
                 char = self.next_char()
             if char != '.':
                 return Token(
                     TokenType.INTEGER,
-                    int(number),
-                    self.current_token_position
+                    self.current_token_position,
+                    number
                 )
-            number += char
             char = self.next_char()
+            fractional = 0
+            divisor = 10
+            j = 0
             while char.isdigit():
-                number += char
+                j += 1
+                if j > self.max_float_decimals:
+                    raise TooManyDecimalsInFloatError(
+                        self.max_float_decimals,
+                        self.current_token_position
+                    )
+                fractional += int(char) / divisor
+                divisor *= 10
                 char = self.next_char()
+            number = float(number) + fractional
+            print(type(number))
             return Token(
                 TokenType.FLOAT,
-                float(number),
-                self.current_token_position
+                self.current_token_position,
+                number
             )
 
     def try_char_or_operator(self):
@@ -246,7 +273,6 @@ class Lexer:
             self.next_char()
             return Token(
                 token_type,
-                '',
                 self.current_token_position
             )
 
@@ -258,7 +284,6 @@ class Lexer:
                 self.next_char()
                 return Token(
                     token_type[1],
-                    '',
                     self.current_token_position
                 )
 
@@ -269,27 +294,11 @@ class Lexer:
             if first_char + second_char != token_type_tuple[0]:
                 return Token(
                     token_type_tuple[1],
-                    '',
                     self.current_token_position
                 )
             else:
                 self.next_char()
                 return Token(
                     token_type_tuple[2],
-                    '',
                     self.current_token_position
                 )
-
-    def get_tokens(self):
-        tokens = []
-        errors = []
-        while True:
-            try:
-                if token := self.tokenize():
-                    tokens.append(token)
-                    if token.token_type == TokenType.END_OF_FILE:
-                        break
-            except LexerError as e:
-                errors.append(e)
-                break
-        return tokens, errors
