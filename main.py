@@ -1,21 +1,21 @@
-# import io
 import argparse
 
 from src.lexer.lexer import Lexer
 from src.lexer.stream import Stream
 from src.parser.parser import Parser
-from src.parser.print_tree_visitor import PrintTreeVisitor
 from src.constants import (
     MAXIMUM_IDENTIFIER,
     MAXIMUM_STRING,
     MAXIMUM_INT_DIGITS,
-    MAXIMUM_FLOAT_DECIMALS
+    MAXIMUM_FLOAT_DECIMALS,
+    MAXIMUM_RECURSION_DEPTH
 )
+from src.interpreter.interpreter import Interpreter
 
 PATH = './examples/code_example.txt'
 
 
-def main(file, max_id, max_string, max_int, max_float_decimals):
+def main(file, max_id, max_string, max_int, max_float_decimals, max_recursion):
     with open(file, 'r') as f:
         lexer = Lexer(
             Stream(f),
@@ -26,8 +26,8 @@ def main(file, max_id, max_string, max_int, max_float_decimals):
         )
         parser = Parser(lexer)
         program = parser.parse_program()
-    printer = PrintTreeVisitor()
-    printer.visit(program)
+    interpreter = Interpreter(max_recursion)
+    interpreter.interpret(program)
 
 
 if __name__ == "__main__":
@@ -53,6 +53,17 @@ if __name__ == "__main__":
         type=int,
         help="maximum number of digits after a decimal in float"
     )
+    parser.add_argument(
+        "--max_recursion_depth",
+        type=int,
+        help="maximum function recursion depth"
+    )
+    parser.add_argument(
+        "-f",
+        "--file",
+        type=str,
+        help="path to the file containing the code"
+    )
 
     args = parser.parse_args()
 
@@ -72,5 +83,13 @@ if __name__ == "__main__":
         args.max_float_decimals if args.max_float_decimals
         else MAXIMUM_FLOAT_DECIMALS
     )
+    max_recursion = (
+        args.max_recursion_depth if args.max_recursion_depth
+        else MAXIMUM_RECURSION_DEPTH
+    )
+    file = (
+        args.file if args.file
+        else PATH
+    )
 
-    main(PATH, max_id, max_string, max_int, max_float_decimals)
+    main(file, max_id, max_string, max_int, max_float_decimals, max_recursion)

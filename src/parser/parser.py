@@ -8,8 +8,6 @@ from src.parser.parser_tree import (
     BreakStatement,
     ReturnStatement,
     Assignment,
-    Call,
-    SingleCall,
     FunctionDefinition,
     Parameter,
     IfStatement,
@@ -28,22 +26,18 @@ from src.parser.parser_tree import (
     MultiplicationExpression,
     DivisionExpression,
     PowerExpression,
-    NotExpression,
+    NotExpressionLogical,
+    NotExpressionAritmetic,
     Term,
     List,
     ListIndex,
-    TermType
+    ListIndexAccess,
+    Identifier,
+    FunCall,
+    TermType,
+    VariableAssignment,
+    DotAccess
 )
-
-listable = [
-    TokenType.IDENTIFIER,
-    TokenType.INTEGER,
-    TokenType.FLOAT,
-    TokenType.BOOL,
-    TokenType.STRING,
-    TokenType.LEFT_PARENTHASIS,
-    TokenType.LEFT_SQUARE_BRACKETS,
-]
 
 
 class Parser:
@@ -87,7 +81,8 @@ class Parser:
             return stmt
         return None
 
-    # block_statement         ::= assignment_statement_or_call
+    # block_statement         ::= assignment_statement_or_object
+    #                             | variable_declaration
     #                             | break_statement
     #                             | return_statement
     #                             | if_statement
@@ -99,7 +94,9 @@ class Parser:
             return stmt
         if stmt := self.parse_return_statement():
             return stmt
-        if stmt := self.parse_assignment_or_call():
+        if stmt := self.parse_variable_declaration():
+            return stmt
+        if stmt := self.parse_assignment_or_object():
             return stmt
         if stmt := self.parse_if_statement():
             return stmt
@@ -108,6 +105,7 @@ class Parser:
         if stmt := self.parse_for_statement():
             return stmt
         if stmt := self.parse_expression():
+            self.token_must_be(TokenType.SEMICOLON)
             return stmt
         return None
 
@@ -130,27 +128,37 @@ class Parser:
         self.token_must_be(TokenType.SEMICOLON)
         return ReturnStatement(pos, value)
 
-    # assignment_statement_or_call ::= call, ["=", expression], ';';
-    def parse_assignment_or_call(self):
+    # variable_declaration ::= "var", identifier, "=", expression, ";";
+    def parse_variable_declaration(self):
+        if self.token.token_type != TokenType.VAR:
+            return None
+        pos = self.get_position()
+        self.consume_token()
+        identifier = self.token_must_be(TokenType.IDENTIFIER)
+        self.token_must_be(TokenType.ASSIGN_OPERATOR)
+        value = self.parse_expression()
+        self.token_must_be(TokenType.SEMICOLON)
+        return VariableAssignment(pos, Identifier(pos, identifier), value)
+
+    # assignment_statement_or_object ::=
+    # identifier, {".", object} ["=", expression], ';';
+    def parse_assignment_or_object(self):
         if self.token.token_type != TokenType.IDENTIFIER:
             return None
         pos = self.get_position()
-        call = self.parse_call()
+        obj = self.parse_object()
         if self.token.token_type == TokenType.SEMICOLON:
             self.consume_token()
-            return call
+            return obj
         self.token_must_be(TokenType.ASSIGN_OPERATOR)
-        if self.token.token_type == TokenType.LEFT_SQUARE_BRACKETS:
-            value = self.parse_list()
-        else:
-            value = self.parse_expression()
+        value = self.parse_expression()
         if not value:
             raise InvalidSyntaxError(
                 pos,
                 'No value after ASSIGN operator in assignment'
             )
         self.token_must_be(TokenType.SEMICOLON)
-        return Assignment(pos, call, value)
+        return Assignment(pos, obj, value)
 
     # list ::= "[", [expression, {",", expression}], "]";
     def parse_list(self):
@@ -172,27 +180,26 @@ class Parser:
         self.token_must_be(TokenType.RIGHT_SQUARE_BRACKETS)
         return List(pos, values)
 
-    # list_index ::= "[", int, "]";
+    # list_index ::= "[", int | expression, "]";
     def parse_list_index(self):
         if self.token.token_type != TokenType.LEFT_SQUARE_BRACKETS:
             return None
         pos = self.get_position()
         self.consume_token()
-        index = self.token_must_be(TokenType.INTEGER)
+        index = self.parse_expression()
         self.token_must_be(TokenType.RIGHT_SQUARE_BRACKETS)
         return ListIndex(pos, index)
 
-    # single_call ::= identifier, [argument_list | list_index];
+    # object ::= identifier, [argument_list | list_index];
     # argument_list ::= "(", [expression, {",", expression}], ")";
-    def parse_single_call(self):
+    def parse_single_object(self):
         if self.token.token_type != TokenType.IDENTIFIER:
             return None
         identifier = self.token.value
         pos = self.get_position()
         self.consume_token()
-        arguments = []
-        list_index = None
         if self.token.token_type == TokenType.LEFT_PARENTHASIS:
+            arguments = []
             self.consume_token()
             while arg := self.parse_expression():
                 arguments.append(arg)
@@ -201,27 +208,33 @@ class Parser:
                 else:
                     break
             self.token_must_be(TokenType.RIGHT_PARENTHASIS)
+            return FunCall(pos, identifier, arguments)
         elif self.token.token_type == TokenType.LEFT_SQUARE_BRACKETS:
-            list_index = self.parse_list_index()
-        return SingleCall(pos, identifier, arguments, list_index)
+            indexes = []
+            while self.token.token_type == TokenType.LEFT_SQUARE_BRACKETS:
+                list_index = self.parse_list_index()
+                indexes.append(list_index)
+            return ListIndexAccess(pos, identifier, indexes)
+        return Identifier(pos, identifier)
 
-    # call ::= call, ".", {call};
-    def parse_call(self):
+    def parse_object(self):
         if self.token.token_type != TokenType.IDENTIFIER:
             return None
         pos = self.get_position()
-        calls = []
-        calls.append(self.parse_single_call())
+        obj = self.parse_single_object()
+        attributes = []
         while self.token.token_type == TokenType.POINT:
             self.consume_token()
-            if call := self.parse_single_call():
-                calls.append(call)
+            if attr := self.parse_single_object():
+                attributes.append(attr)
             else:
                 raise InvalidSyntaxError(
                     pos,
                     'No call after POINT operator'
                 )
-        return Call(pos, calls)
+        if len(attributes) == 0:
+            return obj
+        return DotAccess(pos, obj, attributes)
 
     # if_statement ::= "if", "(", expression, ")", operation_block,
     #                 ["else", operation_block];
@@ -252,7 +265,7 @@ class Parser:
         operation = self.parse_operation_block()
         return WhileStatement(pos, condition, operation)
 
-    # for_statement ::= "for", "(", identifier, "in", call | list, ")",
+    # for_statement ::= "for", "(", identifier, "in", list | identifier, ")",
     #                   operation_block;
     def parse_for_statement(self):
         if self.token.token_type != TokenType.FOR:
@@ -463,6 +476,7 @@ class Parser:
             TokenType.NEGATION_OPERATOR, TokenType.SUBTRACT_OPERATOR
         ]:
             pos = self.get_position()
+            operator = self.token
             self.consume_token()
             term = self.parse_term()
             if not term:
@@ -470,14 +484,17 @@ class Parser:
                     pos,
                     'No factor for NOT expression'
                 )
-            return NotExpression(pos, term)
+            if operator.token_type == TokenType.NEGATION_OPERATOR:
+                return NotExpressionLogical(pos, term)
+            return NotExpressionAritmetic(pos, term)
         return self.parse_term()
 
     # term                        ::= int
     #                                 | float
     #                                 | bool
     #                                 | string
-    #                                 | call
+    #                                 | object
+    #                                 | list
     #                                 | '(' expression ')';
     def parse_term(self):
         pos = self.get_position()
@@ -498,7 +515,10 @@ class Parser:
             self.consume_token()
             return Term(pos, TermType.STRING, value)
         if self.token.token_type == TokenType.IDENTIFIER:
-            return self.parse_call()
+            return self.parse_object()
+        if self.token.token_type == TokenType.LEFT_SQUARE_BRACKETS:
+            list_expr = self.parse_list()
+            return list_expr
         if self.token.token_type == TokenType.LEFT_PARENTHASIS:
             self.consume_token()
             expr = self.parse_expression()

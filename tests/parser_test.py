@@ -18,10 +18,13 @@ from src.error_handling.parser_error import (
 from src.parser.parser_tree import (
     Term,
     TermType,
-    SingleCall,
-    Call,
+    Identifier,
+    ListIndexAccess,
+    FunCall,
+    DotAccess,
     Assignment,
-    NotExpression,
+    NotExpressionLogical,
+    NotExpressionAritmetic,
     PowerExpression,
     MultiplicationExpression,
     DivisionExpression,
@@ -39,6 +42,7 @@ from src.parser.parser_tree import (
     Parameter,
     FunctionDefinition,
     ForStatement,
+    VariableAssignment,
     WhileStatement,
     IfStatement,
     List,
@@ -106,83 +110,81 @@ class TestParser:
         assert val.value in [False]
         assert val.term_type == TermType.BOOL
 
-    def test_parse_single_call(self):
+    def test_parse_single_object(self):
         text = 'identifier'
         parser = self.init_parser(text)
-        val = parser.parse_single_call()
-        assert isinstance(val, SingleCall)
+        val = parser.parse_single_object()
+        assert isinstance(val, Identifier)
         assert val.identifier == 'identifier'
-        assert val.arguments == []
 
-    def test_parse_call_with_params(self):
+    def test_parse_object_with_params(self):
         text = 'func(a, b)'
         parser = self.init_parser(text)
-        val = parser.parse_single_call()
-        assert isinstance(val, SingleCall)
+        val = parser.parse_single_object()
+        assert isinstance(val, FunCall)
         assert val.identifier == 'func'
         assert len(val.arguments) == 2
 
-    def test_parse_call_with_list_index(self):
+    def test_parse_object_with_list_index(self):
         text = 'object[1]'
         parser = self.init_parser(text)
-        val = parser.parse_single_call()
-        assert isinstance(val, SingleCall)
+        val = parser.parse_single_object()
+        assert isinstance(val, ListIndexAccess)
         assert val.identifier == 'object'
-        assert len(val.arguments) == 0
-        assert val.list_index.index == 1
+        assert len(val.list_indexes) == 1
+        assert val.list_indexes[0].list_index.value == 1
 
-    def test_parse_call(self):
+    def test_parse_object(self):
         text = 'object.attribute.method()'
         parser = self.init_parser(text)
-        val = parser.parse_call()
-        assert isinstance(val, Call)
-        assert len(val.call) == 3
-        assert isinstance(val.call[0], SingleCall)
-        assert val.call[0].identifier == 'object'
-        assert len(val.call[0].arguments) == 0
-        assert isinstance(val.call[1], SingleCall)
-        assert val.call[1].identifier == 'attribute'
-        assert len(val.call[1].arguments) == 0
-        assert isinstance(val.call[2], SingleCall)
-        assert val.call[2].identifier == 'method'
-        assert len(val.call[2].arguments) == 0
+        val = parser.parse_object()
+        assert isinstance(val, DotAccess)
+        assert isinstance(val.obj, Identifier)
+        assert len(val.dot_access) == 2
+        assert val.obj.identifier == 'object'
+        assert isinstance(val.dot_access[0], Identifier)
+        assert val.dot_access[0].identifier == 'attribute'
+        assert isinstance(val.dot_access[1], FunCall)
+        assert val.dot_access[1].identifier == 'method'
+        assert len(val.dot_access[1].arguments) == 0
 
         text = 'object[1].method()'
         parser = self.init_parser(text)
-        val = parser.parse_call()
-        assert isinstance(val, Call)
-        assert len(val.call) == 2
-        assert isinstance(val.call[0], SingleCall)
-        assert val.call[0].identifier == 'object'
-        assert len(val.call[0].arguments) == 0
-        assert isinstance(val.call[0].list_index, ListIndex)
-        assert val.call[0].list_index.index == 1
-        assert isinstance(val.call[1], SingleCall)
-        assert val.call[1].identifier == 'method'
-        assert len(val.call[1].arguments) == 0
+        val = parser.parse_object()
+        assert isinstance(val, DotAccess)
+        assert len(val.dot_access) == 1
+        assert isinstance(val.obj, ListIndexAccess)
+        assert val.obj.identifier == 'object'
+        assert isinstance(val.obj.list_indexes, list)
+        assert isinstance(val.obj.list_indexes[0], ListIndex)
+        assert len(val.obj.list_indexes) == 1
+        assert val.obj.list_indexes[0].list_index.value == 1
+        assert isinstance(val.dot_access[0], FunCall)
+        assert val.dot_access[0].identifier == 'method'
+        assert len(val.dot_access[0].arguments) == 0
 
     def test_parse_simple_assignment(self):
-        text = 'a = 1;'
+        text = 'var a = 1;'
         parser = self.init_parser(text)
-        val = parser.parse_assignment_or_call()
-        assert isinstance(val, Assignment)
-        assert isinstance(val.call, Call)
+        val = parser.parse_variable_declaration()
+        assert isinstance(val, VariableAssignment)
+        assert isinstance(val.variable, Identifier)
         assert isinstance(val.value, Term)
-        assert val.call.call[0].identifier == 'a'
+        assert val.variable.identifier == 'a'
         assert val.value.value == 1
 
     def test_parse_unary_term(self):
         text = '!a'
         parser = self.init_parser(text)
         val = parser.parse_expression()
-        assert isinstance(val, NotExpression)
-        assert val.term == Call([1, 2], [SingleCall([1, 2], 'a', [])])
+        assert isinstance(val, NotExpressionLogical)
+        assert val.term == Identifier([1, 2], 'a')
 
     def test_parse_minus_term(self):
         text = '-1'
         parser = self.init_parser(text)
         val = parser.parse_expression()
-        assert isinstance(val, NotExpression)
+        assert isinstance(val, NotExpressionAritmetic)
         assert val.term == Term([1, 2], TermType.INT, 1)
 
     def test_parse_power_expression(self):
@@ -264,6 +266,17 @@ class TestParser:
             Term([1, 9], TermType.INT, 4)
         )
 
+        text = '(2 + 3) * 4'
+        parser = self.init_parser(text)
+        val = parser.parse_expression()
+        assert isinstance(val, MultiplicationExpression)
+        assert val.left == AdditionExpression(
+            [1, 4],
+            Term([1, 2], TermType.INT, 2),
+            Term([1, 6], TermType.INT, 3)
+        )
+        assert val.right == Term([1, 11], TermType.INT, 4)
+
     def test_parse_subtraction_expression(self):
         text = '2 - 3'
         parser = self.init_parser(text)
@@ -307,7 +320,7 @@ class TestParser:
         parser = self.init_parser(text)
         val = parser.parse_expression()
         assert isinstance(val, LessThanExpression)
-        assert isinstance(val.left, Call)
+        assert isinstance(val.left, DotAccess)
         assert val.right == Term([1, 9], TermType.INT, 4)
 
     def test_parse_greater_than_expression(self):
@@ -355,8 +368,8 @@ class TestParser:
         parser = self.init_parser(text)
         val = parser.parse_expression()
         assert isinstance(val, AndExpression)
-        assert val.left == Call([1, 1], [SingleCall([1, 1], 'a', [])])
-        assert val.right == Call([1, 7], [SingleCall([1, 7], 'b', [])])
+        assert val.left == Identifier([1, 1], 'a')
+        assert val.right == Identifier([1, 7], 'b')
 
         text = 'a and b and True'
         parser = self.init_parser(text)
@@ -364,8 +377,8 @@ class TestParser:
         assert isinstance(val, AndExpression)
         assert val.left == AndExpression(
             [1, 3],
-            Call([1, 1], [SingleCall([1, 1], 'a', [])]),
-            Call([1, 7], [SingleCall([1, 7], 'b', [])])
+            Identifier([1, 1], 'a'),
+            Identifier([1, 7], 'b')
         )
         assert val.right == Term([1, 13], TermType.BOOL, True)
 
@@ -374,8 +387,8 @@ class TestParser:
         parser = self.init_parser(text)
         val = parser.parse_expression()
         assert isinstance(val, OrExpression)
-        assert val.left == Call([1, 1], [SingleCall([1, 1], 'a', [])])
-        assert val.right == Call([1, 6], [SingleCall([1, 6], 'b', [])])
+        assert val.left == Identifier([1, 1], 'a')
+        assert val.right == Identifier([1, 6], 'b')
 
         text = 'a or b or True'
         parser = self.init_parser(text)
@@ -383,8 +396,8 @@ class TestParser:
         assert isinstance(val, OrExpression)
         assert val.left == OrExpression(
             [1, 3],
-            Call([1, 1], [SingleCall([1, 1], 'a', [])]),
-            Call([1, 6], [SingleCall([1, 6], 'b', [])])
+            Identifier([1, 1], 'a'),
+            Identifier([1, 6], 'b')
         )
         assert val.right == Term([1, 11], TermType.BOOL, True)
 
@@ -402,10 +415,10 @@ class TestParser:
         val = parser.parse_expression()
         assert isinstance(val, OrExpression)
         assert isinstance(val.left, AndExpression)
-        assert val.right == Call([1, 24], [SingleCall([1, 24], 'b', [])])
+        assert val.right == Identifier([1, 24], 'b')
         val = val.left
         assert isinstance(val.left, AdditionExpression)
-        assert val.right == Call([1, 19], [SingleCall([1, 19], 'a', [])])
+        assert val.right == Identifier([1, 19], 'a')
         val = val.left
         assert isinstance(val.left, DivisionExpression)
         assert val.left.left == Term([1, 1], TermType.INT, 1)
@@ -413,6 +426,29 @@ class TestParser:
         assert isinstance(val.right, MultiplicationExpression)
         assert val.right.left == Term([1, 9], TermType.INT, 3)
         assert val.right.right == Term([1, 13], TermType.INT, 4)
+
+        text = '(1 + 2) * 3'
+        parser = self.init_parser(text)
+        val = parser.parse_expression()
+        assert isinstance(val, MultiplicationExpression)
+        assert isinstance(val.left, AdditionExpression)
+        assert val.right == Term([1, 11], TermType.INT, 3)
+        val = val.left
+        assert val.left == Term([1, 2], TermType.INT, 1)
+        assert val.right == Term([1, 6], TermType.INT, 2)
+
+        text = '(a or b) and (c and d)'
+        parser = self.init_parser(text)
+        val = parser.parse_expression()
+        assert isinstance(val, AndExpression)
+        assert isinstance(val.left, OrExpression)
+        assert isinstance(val.right, AndExpression)
+        left = val.left
+        right = val.right
+        assert left.left == Identifier([1, 2], 'a')
+        assert left.right == Identifier([1, 7], 'b')
+        assert right.left == Identifier([1, 15], 'c')
+        assert right.right == Identifier([1, 21], 'd')
 
     def test_parse_operation_block(self):
         text = '{a = b; return 1;}'
@@ -432,7 +468,7 @@ class TestParser:
         assert len(val.parameters) == 2
         assert isinstance(val.parameters[0], Parameter)
         assert isinstance(val.parameters[1], Parameter)
-        assert len(val.operation_block.statements) == 1
+        assert len(val.body.statements) == 1
 
     def test_for_statement(self):
         text = 'for (i in range(10)){}'
@@ -440,7 +476,7 @@ class TestParser:
         val = parser.parse_for_statement()
         assert isinstance(val, ForStatement)
         assert val.iterable == 'i'
-        assert isinstance(val.iterable_list, Call)
+        assert isinstance(val.iterable_list, FunCall)
         assert len(val.operation.statements) == 0
 
     def test_while_statement(self):
@@ -560,12 +596,12 @@ class TestParser:
         text = 'object.'
         parser = self.init_parser(text)
         with pytest.raises(InvalidSyntaxError):
-            parser.parse_call()
+            parser.parse_object()
 
         text = 'i =;'
         parser = self.init_parser(text)
         with pytest.raises(InvalidSyntaxError):
-            parser.parse_assignment_or_call()
+            parser.parse_assignment_or_object()
 
         text = '[1, 2, 3,'
         parser = self.init_parser(text)
@@ -576,17 +612,17 @@ class TestParser:
         text = 'i = 5'
         parser = self.init_parser(text)
         with pytest.raises(UnexpectedTokenError):
-            parser.parse_assignment_or_call()
+            parser.parse_assignment_or_object()
 
         text = 'i = fun({}'
         parser = self.init_parser(text)
         with pytest.raises(UnexpectedTokenError):
-            parser.parse_assignment_or_call()
+            parser.parse_assignment_or_object()
 
         text = 'i = fun('
         parser = self.init_parser(text)
         with pytest.raises(UnexpectedTokenError):
-            parser.parse_assignment_or_call()
+            parser.parse_assignment_or_object()
 
         text = '{'
         parser = self.init_parser(text)
@@ -623,12 +659,7 @@ class TestParser:
         with pytest.raises(UnexpectedTokenError):
             parser.parse_function_definition()
 
-        text = 'i[];'
-        parser = self.init_parser(text)
-        with pytest.raises(UnexpectedTokenError):
-            parser.parse_call()
-
         text = 'i[1;'
         parser = self.init_parser(text)
         with pytest.raises(UnexpectedTokenError):
-            parser.parse_call()
+            parser.parse_object()

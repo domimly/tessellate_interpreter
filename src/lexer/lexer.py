@@ -24,6 +24,7 @@ class Lexer:
 
         self.keywords = {
             'def': TokenType.DEF,
+            'var': TokenType.VAR,
             'if': TokenType.IF,
             'elif': TokenType.ELIF,
             'else': TokenType.ELSE,
@@ -139,6 +140,9 @@ class Lexer:
                 if char == 'EOF':
                     return
             self.next_char()
+            self.skip_whitespace()
+            if self.current_char() == '#':
+                self.try_comment()
             self.set_current_token_position()
             return
 

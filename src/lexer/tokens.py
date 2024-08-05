@@ -40,6 +40,7 @@ class TokenType(Enum):
 
     # keywords
     DEF = auto()
+    VAR = auto()
     IF = auto()
     ELIF = auto()
     ELSE = auto()

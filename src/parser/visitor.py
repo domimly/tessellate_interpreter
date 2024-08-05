@@ -1,14 +1,16 @@
 from src.parser.parser_tree import (
+    AttributeAccess,
+    MethodCall,
     Program,
     OperationBlock,
     BreakStatement,
     ReturnStatement,
     Assignment,
-    Call,
-    SingleCall,
-    Parameter,
+    DotAccess,
+    # Parameter,
     FunctionDefinition,
     IfStatement,
+    VariableAssignment,
     WhileStatement,
     ForStatement,
     OrExpression,
@@ -24,9 +26,13 @@ from src.parser.parser_tree import (
     MultiplicationExpression,
     DivisionExpression,
     PowerExpression,
-    NotExpression,
+    NotExpressionLogical,
+    NotExpressionAritmetic,
     List,
     ListIndex,
+    Identifier,
+    FunCall,
+    ListIndexAccess,
     Term
 )
 
@@ -53,17 +59,26 @@ class Visitor:
     def do_for_assignment(self, node: Assignment):
         pass
 
-    def do_for_call(self, node: Call):
+    def do_for_dot_access(self, node: DotAccess):
         pass
 
-    def do_for_single_call(self, node: SingleCall):
+    def do_for_attribute_access(self, node: AttributeAccess):
+        pass
+
+    def do_for_method_call(self, node: MethodCall):
+        pass
+
+    def do_for_fun_call(self, node: FunCall):
+        pass
+
+    def do_for_list_index_access(self, node: ListIndexAccess):
         pass
 
     def do_for_function_definition(self, node: FunctionDefinition):
         pass
 
-    def do_for_parameter(self, node: Parameter):
-        pass
+    # def do_for_parameter(self, node: Parameter):
+    #     pass
 
     def do_for_list_index(self, node: ListIndex):
         pass
@@ -116,11 +131,23 @@ class Visitor:
     def do_for_power_expr(self, node: PowerExpression):
         pass
 
-    def do_for_not_expr(self, node: NotExpression):
+    def do_for_not_expr_logical(self, node: NotExpressionLogical):
+        pass
+
+    def do_for_not_expr_aritmetic(self, node: NotExpressionAritmetic):
         pass
 
     def do_for_term(self, node: Term):
         pass
 
     def do_for_list(self, node: List):
+        pass
+
+    def do_for_identifier(self, node: Identifier):
+        pass
+
+    # def do_for_variable(self, node: Variable):
+    #     pass
+
+    def do_for_variable_assignment(self, node: VariableAssignment):
         pass

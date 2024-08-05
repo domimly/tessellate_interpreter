@@ -7,6 +7,7 @@ class TermType(Enum):
     FLOAT = auto()
     BOOL = auto()
     STRING = auto()
+    LIST = auto()
 
 
 @dataclass
@@ -28,11 +29,19 @@ class Expression(Node):
 
 
 @dataclass
-class Identifier(Expression):
+class Identifier(Node):
     identifier: str
 
     def accept_visitor(self, visitor):
         visitor.do_for_identifier(self)
+
+
+@dataclass
+class Variable(Node):
+    identifier: str
+
+    def accept_visitor(self, visitor):
+        visitor.do_for_variable(self)
 
 
 @dataclass
@@ -44,7 +53,7 @@ class OperationBlock(Node):
 
 
 @dataclass
-class OrExpression(Node):
+class OrExpression(Expression):
     left: Expression
     right: Expression
 
@@ -53,7 +62,7 @@ class OrExpression(Node):
 
 
 @dataclass
-class AndExpression(Node):
+class AndExpression(Expression):
     left: Expression
     right: Expression
 
@@ -161,17 +170,25 @@ class PowerExpression(Expression):
 
 
 @dataclass
-class NotExpression(Expression):
+class NotExpressionLogical(Expression):
     term: Expression
 
     def accept_visitor(self, visitor):
-        visitor.do_for_not_expr(self)
+        visitor.do_for_not_expr_logical(self)
+
+
+@dataclass
+class NotExpressionAritmetic(Expression):
+    term: Expression
+
+    def accept_visitor(self, visitor):
+        visitor.do_for_not_expr_aritmetic(self)
 
 
 @dataclass
 class Term(Expression):
     term_type: TermType
-    value: int | float | bool | str
+    value: int | float | bool | str | list
 
     def accept_visitor(self, visitor):
         visitor.do_for_term(self)
@@ -187,32 +204,41 @@ class Parameter(Node):
 
 @dataclass
 class ListIndex(Node):
-    index: int
+    list_index: int | Expression
 
     def accept_visitor(self, visitor):
         visitor.do_for_list_index(self)
 
 
 @dataclass
-class SingleCall(Node):
+class ListIndexAccess(Node):
+    identifier: str
+    list_indexes: list[ListIndex]
+
+    def accept_visitor(self, visitor):
+        visitor.do_for_list_index_access(self)
+
+
+@dataclass
+class FunCall(Node):
     identifier: str
     arguments: list[Expression]
-    list_index: ListIndex = None
 
     def accept_visitor(self, visitor):
-        visitor.do_for_single_call(self)
+        visitor.do_for_fun_call(self)
 
 
 @dataclass
-class Call(Node):
-    call: list[SingleCall]
+class DotAccess(Node):
+    obj: Identifier | FunCall | ListIndexAccess
+    dot_access: list[Identifier | FunCall]
 
     def accept_visitor(self, visitor):
-        visitor.do_for_call(self)
+        visitor.do_for_dot_access(self)
 
 
 @dataclass
-class List(Node):
+class List(Expression):
     contents: list[Expression]
 
     def accept_visitor(self, visitor):
@@ -237,11 +263,20 @@ class Program(Node):
 
 @dataclass
 class Assignment(Statement):
-    call: Call
+    object: ListIndexAccess | FunCall | DotAccess
     value: Expression | List
 
     def accept_visitor(self, visitor):
         visitor.do_for_assignment(self)
+
+
+@dataclass
+class VariableAssignment(Statement):
+    variable: Identifier
+    value: Expression
+
+    def accept_visitor(self, visitor):
+        visitor.do_for_variable_assignment(self)
 
 
 @dataclass
@@ -282,7 +317,7 @@ class WhileStatement(Statement):
 @dataclass
 class ForStatement(Statement):
     iterable: Identifier
-    iterable_list: List | Call
+    iterable_list: List
     operation: list[Statement]
 
     def accept_visitor(self, visitor):
@@ -293,7 +328,25 @@ class ForStatement(Statement):
 class FunctionDefinition(Statement):
     identifier: str
     parameters: list[Parameter]
-    operation_block: Statement
+    body: OperationBlock
 
     def accept_visitor(self, visitor):
         visitor.do_for_function_definition(self)
+
+
+@dataclass
+class AttributeAccess(Node):
+    object: Identifier | FunCall | ListIndexAccess
+    attribute: Identifier
+
+    def accept_visitor(self, visitor):
+        visitor.do_for_attribute_access(self)
+
+
+@dataclass
+class MethodCall(Node):
+    object: Identifier | FunCall | ListIndexAccess
+    method: FunCall
+
+    def accept_visitor(self, visitor):
+        visitor.do_for_method_call(self)
